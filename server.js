@@ -146,14 +146,22 @@ app.post('/api/subscribe', async (req, res) => {
 
         try {
             // Check if email already exists
+            console.log('Checking for existing email:', normalizedEmail);
             const existingEmail = await Email.findOne({ email: normalizedEmail });
             if (existingEmail) {
+                console.log('Email already exists:', normalizedEmail);
                 return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
             }
 
+            console.log('Creating new email document...');
             const newEmail = new Email({ email: normalizedEmail });
-            await newEmail.save();
-            console.log('New email saved:', normalizedEmail);
+            console.log('Saving to database...');
+            const savedEmail = await newEmail.save();
+            console.log('Email saved successfully:', {
+                email: savedEmail.email,
+                id: savedEmail._id,
+                date: savedEmail.date
+            });
             return res.json({ success: true, message: 'Thank you for subscribing! 🎉' });
         } catch (dbError) {
             console.error('Database operation error:', dbError);
@@ -182,6 +190,42 @@ app.post('/api/subscribe', async (req, res) => {
         return res.status(500).json({ 
             success: false, 
             message: 'An error occurred while processing your request. Please try again.' 
+        });
+    }
+});
+
+// Test route to check database contents (Remove in production!)
+app.get('/api/check-db', async (req, res) => {
+    try {
+        // Check connection status
+        console.log('Database connection state:', mongoose.connection.readyState);
+        
+        // Get database statistics
+        const stats = await mongoose.connection.db.stats();
+        console.log('Database stats:', stats);
+        
+        // Count emails
+        const emailCount = await Email.countDocuments();
+        console.log('Number of emails in database:', emailCount);
+        
+        // Get last 5 emails
+        const recentEmails = await Email.find()
+            .sort({ date: -1 })
+            .limit(5)
+            .select('email date -_id');
+            
+        return res.json({
+            connectionState: mongoose.connection.readyState,
+            databaseName: mongoose.connection.name,
+            emailCount,
+            recentEmails
+        });
+    } catch (error) {
+        console.error('Database check error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error checking database',
+            error: error.message
         });
     }
 });
