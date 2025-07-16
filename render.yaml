@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: email-subscription-app
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
