@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(messageTimeout);
         }
 
+        // Reset classes
+        messageDiv.className = '';
+        formContainer.classList.remove('form-success');
+        
+        // Force a reflow to restart animations
+        void messageDiv.offsetWidth;
+
+        // Add new classes
         messageDiv.className = `${type} show`;
         messageDiv.textContent = type === 'success' ? '🎉 ' + text : '❌ ' + text;
 
@@ -39,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            showMessage('info', 'Submitting...');
+            
             const response = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: {
@@ -49,10 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
             
+            if (!response.ok) {
+                throw new Error(data.message || 'Server error');
+            }
+            
             showMessage(data.success ? 'success' : 'error', data.message);
         } catch (error) {
             console.error('Subscription error:', error);
-            showMessage('error', 'An error occurred. Please try again.');
+            showMessage('error', error.message || 'An error occurred. Please try again.');
         }
     });
 });
