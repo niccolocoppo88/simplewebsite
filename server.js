@@ -40,13 +40,17 @@ const connectDB = async () => {
         await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 10000,
-            socketTimeoutMS: 45000,
-            connectTimeoutMS: 10000,
+            serverSelectionTimeoutMS: 30000,
+            socketTimeoutMS: 60000,
+            connectTimeoutMS: 30000,
             retryWrites: true,
             w: 'majority',
             maxPoolSize: 10,
-            heartbeatFrequencyMS: 2000
+            heartbeatFrequencyMS: 2000,
+            retryReads: true,
+            ssl: true,
+            authSource: 'admin',
+            family: 4
         });
         console.log(`MongoDB Connected: ${mongoose.connection.host}`);
     } catch (error) {
@@ -102,13 +106,20 @@ const validateEmail = (email) => {
 };
 
 // Helper function to wait for database connection
-const waitForConnection = async (maxAttempts = 3) => {
+const waitForConnection = async (maxAttempts = 5) => {
     for (let i = 0; i < maxAttempts; i++) {
+        console.log(`Connection attempt ${i + 1}/${maxAttempts}`);
         if (mongoose.connection.readyState === 1) {
+            console.log('Connection is ready');
             return true;
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (i < maxAttempts - 1) {
+            const waitTime = Math.min(1000 * Math.pow(2, i), 10000); // Exponential backoff
+            console.log(`Waiting ${waitTime}ms before next attempt...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
     }
+    console.log('Max connection attempts reached');
     return false;
 };
 
