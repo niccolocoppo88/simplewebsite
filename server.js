@@ -17,32 +17,52 @@ app.use((err, req, res, next) => {
 });
 
 // MongoDB connection
+let isConnecting = false;
 const connectDB = async () => {
+    if (isConnecting) return;
+    
+    isConnecting = true;
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI, {
+        console.log('Attempting to connect to MongoDB...');
+        await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 45000,
+            connectTimeoutMS: 10000,
+            retryWrites: true,
+            w: 'majority',
+            maxPoolSize: 10,
+            heartbeatFrequencyMS: 2000
         });
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
+        console.log(`MongoDB Connected: ${mongoose.connection.host}`);
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        // Don't exit the process, let the application continue
+    } finally {
+        isConnecting = false;
     }
 };
 
-// Connect to MongoDB
+// Initial connection
 connectDB();
 
-// MongoDB connection error handling
+// MongoDB connection event handlers
+mongoose.connection.on('connected', () => {
+    console.log('MongoDB connection established');
+});
+
 mongoose.connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
+    if (!isConnecting) {
+        setTimeout(connectDB, 5000);
+    }
 });
 
 mongoose.connection.on('disconnected', () => {
     console.log('MongoDB disconnected. Attempting to reconnect...');
-    connectDB();
+    if (!isConnecting) {
+        setTimeout(connectDB, 5000);
+    }
 });
 
 // Email Schema
@@ -68,12 +88,28 @@ const validateEmail = (email) => {
     return re.test(String(email).toLowerCase());
 };
 
+// Helper function to wait for database connection
+const waitForConnection = async (maxAttempts = 3) => {
+    for (let i = 0; i < maxAttempts; i++) {
+        if (mongoose.connection.readyState === 1) {
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    return false;
+};
+
 // Routes
 app.post('/api/subscribe', async (req, res) => {
     try {
-        // Check MongoDB connection
-        if (mongoose.connection.readyState !== 1) {
-            throw new Error('Database connection is not ready');
+        // Wait for connection with retries
+        const isConnected = await waitForConnection();
+        if (!isConnected) {
+            console.error('Database connection not available after retries');
+            return res.status(503).json({ 
+                success: false, 
+                message: 'Service temporarily unavailable. Please try again in a moment.' 
+            });
         }
 
         const { email } = req.body;
@@ -88,35 +124,42 @@ app.post('/api/subscribe', async (req, res) => {
 
         const normalizedEmail = email.toLowerCase().trim();
 
-        // Check if email already exists
-        const existingEmail = await Email.findOne({ email: normalizedEmail });
-        if (existingEmail) {
-            return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
-        }
+        try {
+            // Check if email already exists
+            const existingEmail = await Email.findOne({ email: normalizedEmail });
+            if (existingEmail) {
+                return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
+            }
 
-        const newEmail = new Email({ email: normalizedEmail });
-        await newEmail.save();
-        console.log('New email saved:', normalizedEmail);
-        res.json({ success: true, message: 'Thank you for subscribing! 🎉' });
+            const newEmail = new Email({ email: normalizedEmail });
+            await newEmail.save();
+            console.log('New email saved:', normalizedEmail);
+            return res.json({ success: true, message: 'Thank you for subscribing! 🎉' });
+        } catch (dbError) {
+            console.error('Database operation error:', dbError);
+            
+            if (dbError.code === 11000) {  // Duplicate key error
+                return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
+            }
+
+            throw dbError; // Re-throw for general error handling
+        }
     } catch (error) {
         console.error('Subscription error:', error);
-        
-        if (error.message === 'Database connection is not ready') {
-            return res.status(503).json({ 
-                success: false, 
-                message: 'Service temporarily unavailable. Please try again in a moment.' 
-            });
-        }
         
         if (error.name === 'ValidationError') {
             return res.status(400).json({ success: false, message: 'Invalid email format.' });
         }
 
-        if (error.code === 11000) {  // Duplicate key error
-            return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
-        }
+        // Log the full error for debugging
+        console.error('Detailed error:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            code: error.code
+        });
 
-        res.status(500).json({ 
+        return res.status(500).json({ 
             success: false, 
             message: 'An error occurred while processing your request. Please try again.' 
         });
