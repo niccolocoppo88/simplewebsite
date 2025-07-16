@@ -43,14 +43,10 @@ const connectDB = async () => {
             serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 60000,
             connectTimeoutMS: 30000,
+            dbName: 'emaildb', // Specify the database name explicitly
             retryWrites: true,
-            w: 'majority',
             maxPoolSize: 10,
-            heartbeatFrequencyMS: 2000,
-            retryReads: true,
-            ssl: true,
-            authSource: 'admin',
-            family: 4
+            heartbeatFrequencyMS: 2000
         });
         console.log(`MongoDB Connected: ${mongoose.connection.host}`);
     } catch (error) {
