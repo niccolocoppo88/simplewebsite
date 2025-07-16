@@ -23,6 +23,19 @@ const connectDB = async () => {
     
     isConnecting = true;
     try {
+        // Debug information
+        console.log('Environment variables loaded:');
+        console.log('PORT:', process.env.PORT);
+        console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
+        if (process.env.MONGODB_URI) {
+            // Safely log part of the connection string without exposing credentials
+            const sanitizedUri = process.env.MONGODB_URI.replace(
+                /(mongodb\+srv:\/\/)([^:]+):([^@]+)@/,
+                '$1****:****@'
+            );
+            console.log('Sanitized MONGODB_URI:', sanitizedUri);
+        }
+        
         console.log('Attempting to connect to MongoDB...');
         await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
