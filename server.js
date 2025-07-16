@@ -14,6 +14,17 @@ app.use(express.static('public'));
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/emaildb', {
     useNewUrlParser: true,
     useUnifiedTopology: true
+})
+.then(() => {
+    console.log('Successfully connected to MongoDB.');
+})
+.catch((error) => {
+    console.error('Error connecting to MongoDB:', error);
+});
+
+// MongoDB connection error handling
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
 });
 
 // Email Schema
@@ -35,11 +46,27 @@ const Email = mongoose.model('Email', emailSchema);
 app.post('/api/subscribe', async (req, res) => {
     try {
         const { email } = req.body;
+        
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email is required.' });
+        }
+
+        // Check if email already exists
+        const existingEmail = await Email.findOne({ email });
+        if (existingEmail) {
+            return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
+        }
+
         const newEmail = new Email({ email });
         await newEmail.save();
-        res.json({ success: true, message: 'Email subscribed successfully!' });
+        console.log('New email saved:', email);
+        res.json({ success: true, message: 'Thank you for subscribing! 🎉' });
     } catch (error) {
-        res.status(400).json({ success: false, message: 'Subscription failed. Email might already exist.' });
+        console.error('Subscription error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Subscription failed. Please try again.' 
+        });
     }
 });
 
