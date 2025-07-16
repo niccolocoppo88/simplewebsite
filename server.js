@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: './config.env' });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,6 +9,12 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ success: false, message: 'Something broke!' });
+});
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/emaildb', {
@@ -42,6 +48,12 @@ const emailSchema = new mongoose.Schema({
 
 const Email = mongoose.model('Email', emailSchema);
 
+// Email validation function
+const validateEmail = (email) => {
+    const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    return re.test(String(email).toLowerCase());
+};
+
 // Routes
 app.post('/api/subscribe', async (req, res) => {
     try {
@@ -51,18 +63,25 @@ app.post('/api/subscribe', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email is required.' });
         }
 
+        if (!validateEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+        }
+
         // Check if email already exists
-        const existingEmail = await Email.findOne({ email });
+        const existingEmail = await Email.findOne({ email: email.toLowerCase() });
         if (existingEmail) {
             return res.status(400).json({ success: false, message: 'This email is already subscribed!' });
         }
 
-        const newEmail = new Email({ email });
+        const newEmail = new Email({ email: email.toLowerCase() });
         await newEmail.save();
         console.log('New email saved:', email);
         res.json({ success: true, message: 'Thank you for subscribing! 🎉' });
     } catch (error) {
         console.error('Subscription error:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: 'Invalid email format.' });
+        }
         res.status(500).json({ 
             success: false, 
             message: 'Subscription failed. Please try again.' 

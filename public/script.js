@@ -1,54 +1,58 @@
-document.getElementById('subscriptionForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('subscriptionForm');
     const emailInput = document.getElementById('email');
     const messageDiv = document.getElementById('message');
     const formContainer = document.querySelector('.form-container');
-    const email = emailInput.value;
+    let messageTimeout;
 
-    // Reset message state
-    messageDiv.className = '';
-    messageDiv.textContent = '';
+    const showMessage = (type, text) => {
+        // Clear any existing timeout
+        if (messageTimeout) {
+            clearTimeout(messageTimeout);
+        }
 
-    try {
-        const response = await fetch('/api/subscribe', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email })
-        });
+        messageDiv.className = `${type} show`;
+        messageDiv.textContent = type === 'success' ? '🎉 ' + text : '❌ ' + text;
 
-        const data = await response.json();
-        
-        if (data.success) {
-            // Show success message with animation
-            messageDiv.textContent = '🎉 ' + data.message;
-            messageDiv.className = 'success show';
+        if (type === 'success') {
             formContainer.classList.add('form-success');
             emailInput.value = '';
-            
-            // Reset form after 3 seconds
-            setTimeout(() => {
-                messageDiv.className = '';
-                formContainer.classList.remove('form-success');
-            }, 3000);
-        } else {
-            messageDiv.className = 'error show';
-            messageDiv.textContent = '❌ ' + data.message;
-            
-            // Hide error message after 3 seconds
-            setTimeout(() => {
-                messageDiv.className = '';
-            }, 3000);
         }
-    } catch (error) {
-        messageDiv.className = 'error show';
-        messageDiv.textContent = '❌ An error occurred. Please try again.';
-        
-        // Hide error message after 3 seconds
-        setTimeout(() => {
+
+        // Set new timeout
+        messageTimeout = setTimeout(() => {
             messageDiv.className = '';
+            if (type === 'success') {
+                formContainer.classList.remove('form-success');
+            }
         }, 3000);
-    }
+    };
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const email = emailInput.value.trim();
+
+        if (!email) {
+            showMessage('error', 'Please enter an email address.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email })
+            });
+
+            const data = await response.json();
+            
+            showMessage(data.success ? 'success' : 'error', data.message);
+        } catch (error) {
+            console.error('Subscription error:', error);
+            showMessage('error', 'An error occurred. Please try again.');
+        }
+    });
 });

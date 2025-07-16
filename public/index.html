@@ -11,9 +11,16 @@
         <div class="form-container">
             <h1>Subscribe to Our Newsletter</h1>
             <p>Stay updated with our latest news and updates!</p>
-            <form id="subscriptionForm">
+            <form id="subscriptionForm" novalidate>
                 <div class="input-group">
-                    <input type="email" id="email" placeholder="Enter your email" required>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        placeholder="Enter your email" 
+                        required
+                        pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                        autocomplete="email">
                     <button type="submit">Subscribe</button>
                 </div>
             </form>
